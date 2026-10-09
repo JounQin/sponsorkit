@@ -198,6 +198,17 @@ describe('fetchPatreonSponsors', () => {
     await expect(fetchPatreonSponsors('token')).resolves.toEqual([])
   })
 
+  it('fails loudly when a collection response has no data member', async () => {
+    // A collection document always carries `data`, so this response is malformed. The provider
+    // trusts that contract instead of treating it as "no sponsors".
+    fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
+      .mockResolvedValueOnce({ links: {} })
+
+    await expect(fetchPatreonSponsors('token'))
+      .rejects
+      .toThrow(TypeError)
+  })
+
   it('handles identity-masked members without throwing', async () => {
     fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
       .mockResolvedValueOnce({

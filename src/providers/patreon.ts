@@ -106,9 +106,10 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
       },
       responseType: 'json',
     })
-    // `included` is absent unless the request's `include` matched something.
+    // `data` is guaranteed by the collection document; `included` is absent unless the request's
+    // `include` matched something.
     const included = sponsorshipData?.included ?? []
-    const members = sponsorshipData?.data ?? []
+    const members = sponsorshipData.data
     // Split once so the lookups below are typed by resource rather than by a union.
     const users = included.filter((v): v is PatreonUserResource => v.type === 'user')
     const tiers = included.filter((v): v is PatreonTierResource => v.type === 'tier')
