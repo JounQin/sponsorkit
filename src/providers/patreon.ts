@@ -64,19 +64,17 @@ interface PatreonTierResource extends PatreonResource<PatreonTierAttributes> {
   type: 'tier'
 }
 
-type PatreonIncludedResource = PatreonUserResource | PatreonTierResource
-
 interface PatreonMembersData {
   /** A collection document always carries `data`; `[]` when there are no members. */
   data: PatreonResource<PatreonMemberAttributes>[]
-  /** Only present when `include` matched something. */
-  included?: PatreonIncludedResource[]
+  /** Only present when `include` matched something; joined to members by `relatedId`. */
+  included?: (PatreonUserResource | PatreonTierResource)[]
   links?: { next?: string }
 }
 
 /** A collection document carries `data`; only the campaign `id` is read. */
 interface PatreonCampaignsData {
-  data: { id?: string }[]
+  data: { id: string }[]
 }
 
 /** A member joined to the user and tier it references. */
