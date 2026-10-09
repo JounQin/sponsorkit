@@ -15,7 +15,6 @@ export const PatreonProvider: Provider = {
 
 /** Patreon's v2 API base. The v1 API was retired on 2026-10-07. */
 const PATREON_API = 'https://www.patreon.com/api/oauth2/v2'
-const USER_AGENT = 'SponsorKit (https://github.com/antfu-collective/sponsorkit)'
 
 /** A JSON:API resource identifier; both members are required, except for client-originated resources. */
 interface PatreonIdentifier {
@@ -67,7 +66,7 @@ interface PatreonTierResource extends PatreonResource<PatreonTierAttributes> {
 interface PatreonMembersData {
   /** A collection document always carries `data`; `[]` when there are no members. */
   data: PatreonResource<PatreonMemberAttributes>[]
-  /** Only present when `include` matched something; joined to members by `relatedId`. */
+  /** Only present when `include` matched something; joined to members by `firstRelatedId`. */
   included?: (PatreonUserResource | PatreonTierResource)[]
   links?: { next?: string }
 }
@@ -100,28 +99,25 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
   do {
     // The annotation is needed: this loop feeds `links.next` back into `sponsorshipApi`, and
     // TypeScript cannot infer the response through that cycle.
-    const sponsorshipData: PatreonMembersData = await $fetch(sponsorshipApi, {
+    const { included = [], data: members, links }: PatreonMembersData = await $fetch(sponsorshipApi, {
       method: 'GET',
       headers: patreonHeaders(token),
       responseType: 'json',
     })
-    // `included` is absent unless the request's `include` matched something.
-    const included = sponsorshipData.included ?? []
-    const members = sponsorshipData.data
-    // Split by kind so each lookup below is typed, rather than a union `find` cannot narrow.
-    const users = included.filter((v): v is PatreonUserResource => v.type === 'user')
-    const tiers = included.filter((v): v is PatreonTierResource => v.type === 'tier')
+    // Split by kind so each lookup below searches a homogeneous array.
+    const users = included.filter(v => v.type === 'user')
+    const tiers = included.filter(v => v.type === 'tier')
 
     sponsors.push(
       ...members
         .filter(membership => membership.attributes?.patron_status != null)
         .map(membership => ({
           membership,
-          patron: users.find(v => v.id === relatedId(membership, 'user', 0)),
-          tier: tiers.find(v => v.id === relatedId(membership, 'currently_entitled_tiers', 0)),
+          patron: users.find(v => v.id === firstRelatedId(membership, 'user')),
+          tier: tiers.find(v => v.id === firstRelatedId(membership, 'currently_entitled_tiers')),
         })),
     )
-    sponsorshipApi = sponsorshipData.links?.next
+    sponsorshipApi = links?.next
   } while (sponsorshipApi)
 
   return sponsors.map((raw): Sponsorship => {
@@ -180,22 +176,21 @@ async function fetchPatreonCampaignId(token: string): Promise<string> {
 }
 
 /**
- * Read the id at `index` from a relationship that may be a to-one or a to-many. The optional chain
- * on `entry` is load-bearing: an empty to-many relationship yields `undefined`, which the type of
- * `data[index]` does not show because `noUncheckedIndexedAccess` is off.
+ * The first id of a relationship that may be a to-one or a to-many. The optional chain is
+ * load-bearing: an empty to-many relationship yields `undefined`, which the type of `data[0]` does
+ * not show because `noUncheckedIndexedAccess` is off.
  */
-function relatedId(resource: PatreonResource, name: string, index: number): string | undefined {
+function firstRelatedId(resource: PatreonResource, name: string): string | undefined {
   const data = resource.relationships?.[name]?.data
-  const entry = Array.isArray(data) ? data[index] : data
+  const entry = Array.isArray(data) ? data[0] : data
   return entry?.id
 }
 
-/** Shared by both calls, so a header added for one is never missing from the other. */
+/** Shared by both calls so their headers cannot drift apart. */
 function patreonHeaders(token: string) {
   return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
+    'Authorization': `bearer ${token}`,
     // Patreon may drop requests without one.
-    'User-Agent': USER_AGENT,
+    'User-Agent': 'SponsorKit (https://github.com/antfu-collective/sponsorkit)',
   }
 }

@@ -85,7 +85,7 @@ describe('fetchPatreonSponsors', () => {
     await fetchPatreonSponsors('secret-token')
 
     const headers = fetchMock.mock.calls[0][1].headers
-    expect(headers.Authorization).toBe('Bearer secret-token')
+    expect(headers.Authorization).toBe('bearer secret-token')
     expect(headers['User-Agent']).toContain('SponsorKit')
   })
 
@@ -179,7 +179,7 @@ describe('fetchPatreonSponsors', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(fetchMock.mock.calls[2][0]).toContain('page%5Bcursor%5D=NEXT')
     // The cursor page is a fresh request, so it must carry the credentials too.
-    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe('Bearer token')
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe('bearer token')
     expect(sponsors.map(s => s.sponsor.name)).toEqual(['First', 'Second'])
   })
 
