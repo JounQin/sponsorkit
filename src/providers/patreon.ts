@@ -29,14 +29,19 @@ interface PatreonResource<A = unknown> {
   relationships?: Record<string, { data?: { id?: string, type?: string } | { id?: string, type?: string }[] | null }>
 }
 
-/** `patron_status` is null for members who never pledged; the other two mark past sponsors. */
-type PatronStatus = 'active_patron' | 'former_patron' | 'declined_patron'
+/**
+ * `patron_status` is documented only as a nullable string, so the known values are enumerated for
+ * the past-sponsor check rather than used to narrow the type.
+ */
+type PatronStatus = string
+
+/** Both of these mark a lapsed sponsor; see `patron_status` in the Member resource. */
+const PAST_PATRON_STATUSES: readonly PatronStatus[] = ['former_patron', 'declined_patron']
 
 export interface PatreonMemberAttributes {
   currently_entitled_amount_cents?: number | null
   patron_status?: PatronStatus | null
   pledge_relationship_start?: string | null
-  lifetime_support_cents?: number | null
 }
 
 /** Patreon sends `null` for these when a member has opted out of sharing their profile. */
@@ -84,8 +89,9 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
   const campaignId = await fetchPatreonCampaignId(token)
 
   // API v2 returns up to 1000 members per page and paginates with a `links.next` cursor.
+  // Every field read below is requested explicitly; v2 returns no attributes otherwise.
   const sponsors: PatreonSponsorRecord[] = []
-  let sponsorshipApi: string | undefined = `${PATREON_API}/campaigns/${campaignId}/members?include=user,currently_entitled_tiers&fields%5Bmember%5D=currently_entitled_amount_cents,patron_status,pledge_relationship_start,lifetime_support_cents&fields%5Buser%5D=image_url,url,first_name,full_name&fields%5Btier%5D=amount_cents`
+  let sponsorshipApi: string | undefined = `${PATREON_API}/campaigns/${campaignId}/members?include=user,currently_entitled_tiers&fields%5Bmember%5D=currently_entitled_amount_cents,patron_status,pledge_relationship_start&fields%5Buser%5D=image_url,url,first_name,full_name&fields%5Btier%5D=amount_cents`
 
   do {
     // The annotation is not redundant: this pagination loop feeds `links.next` back into
@@ -149,7 +155,8 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
     }
 
     // The "former_patron" and "declined_patron" both is past sponsors
-    if (['former_patron', 'declined_patron'].includes(attributes?.patron_status ?? ''))
+    const status = attributes?.patron_status
+    if (status != null && PAST_PATRON_STATUSES.includes(status))
       sponsor.monthlyDollars = -1
 
     return sponsor

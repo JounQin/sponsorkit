@@ -22,7 +22,6 @@ function member(id: string, userId: string, attributes: PatreonMemberAttributes 
       currently_entitled_amount_cents: 500,
       patron_status: 'active_patron',
       pledge_relationship_start: '2024-01-01T00:00:00+00:00',
-      lifetime_support_cents: 500,
       ...attributes,
     },
     relationships: {
@@ -63,6 +62,20 @@ describe('fetchPatreonSponsors', () => {
     expect(urls[0]).toBe(CAMPAIGNS_URL)
     expect(urls[1]).toContain('/api/oauth2/v2/campaigns/999/members?')
     expect(urls.every((url: string) => !url.includes('/oauth2/api/'))).toBe(true)
+  })
+
+  it('requests exactly the fields it reads, and no deprecated ones', async () => {
+    fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
+      .mockResolvedValueOnce({ data: [], links: {} })
+
+    await fetchPatreonSponsors('token')
+
+    const url = fetchMock.mock.calls[1][0] as string
+    expect(decodeURIComponent(url)).toContain('fields[member]=currently_entitled_amount_cents,patron_status,pledge_relationship_start')
+    expect(decodeURIComponent(url)).toContain('fields[user]=image_url,url,first_name,full_name')
+    expect(decodeURIComponent(url)).toContain('fields[tier]=amount_cents')
+    // The docs mark this one deprecated; it is not read, so it is not requested.
+    expect(url).not.toContain('lifetime_support_cents')
   })
 
   it('sends bearer auth and a User-Agent header', async () => {
