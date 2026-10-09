@@ -74,7 +74,7 @@ describe('fetchPatreonSponsors', () => {
     expect(decodeURIComponent(url)).toContain('fields[member]=currently_entitled_amount_cents,patron_status,pledge_relationship_start')
     expect(decodeURIComponent(url)).toContain('fields[user]=image_url,url,first_name,full_name')
     expect(decodeURIComponent(url)).toContain('fields[tier]=amount_cents')
-    // The docs mark this one deprecated; it is not read, so it is not requested.
+    // Deprecated in the docs and never read, so it must not be requested.
     expect(url).not.toContain('lifetime_support_cents')
   })
 
@@ -199,8 +199,8 @@ describe('fetchPatreonSponsors', () => {
   })
 
   it('fails loudly when a collection response has no data member', async () => {
-    // A collection document always carries `data`, so this response is malformed. The provider
-    // trusts that contract instead of treating it as "no sponsors".
+    // A collection document always carries `data`, so this is malformed and must fail rather
+    // than be read as "no sponsors".
     fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
       .mockResolvedValueOnce({ links: {} })
 

@@ -17,10 +17,7 @@ export const PatreonProvider: Provider = {
 const PATREON_API = 'https://www.patreon.com/api/oauth2/v2'
 const USER_AGENT = 'SponsorKit (https://github.com/antfu-collective/sponsorkit)'
 
-/**
- * A JSON:API resource. Every resource carries the relationship ids needed to join members to the
- * users and tiers in `included`, so any page can serve them all.
- */
+/** A JSON:API resource; relationships carry the ids used to join `included` back to members. */
 interface PatreonResource<A = unknown> {
   id?: string
   type?: string
@@ -29,13 +26,10 @@ interface PatreonResource<A = unknown> {
   relationships?: Record<string, { data?: { id?: string, type?: string } | { id?: string, type?: string }[] | null }>
 }
 
-/**
- * `patron_status` is documented only as a nullable string, so the known values are enumerated for
- * the past-sponsor check rather than used to narrow the type.
- */
+/** Documented only as a nullable string, so known values are matched, not encoded in the type. */
 type PatronStatus = string
 
-/** Both of these mark a lapsed sponsor; see `patron_status` in the Member resource. */
+/** Both mark a lapsed sponsor. */
 const PAST_PATRON_STATUSES: readonly PatronStatus[] = ['former_patron', 'declined_patron']
 
 export interface PatreonMemberAttributes {
@@ -44,7 +38,7 @@ export interface PatreonMemberAttributes {
   pledge_relationship_start?: string | null
 }
 
-/** Patreon sends `null` for these when a member has opted out of sharing their profile. */
+/** Patreon sends `null` when a member has opted out of sharing their profile. */
 export interface PatreonUserAttributes {
   first_name?: string | null
   full_name?: string | null
@@ -56,7 +50,7 @@ interface PatreonTierAttributes {
   amount_cents?: number | null
 }
 
-/** Discriminated on `type`, so a `find` narrows to the resource it matched. */
+/** Discriminated on `type` so the two resource kinds can be separated by a type guard. */
 interface PatreonUserResource extends PatreonResource<PatreonUserAttributes> {
   type: 'user'
 }
@@ -68,14 +62,14 @@ interface PatreonTierResource extends PatreonResource<PatreonTierAttributes> {
 type PatreonIncludedResource = PatreonUserResource | PatreonTierResource
 
 interface PatreonMembersData {
-  /** A JSON:API collection document always carries `data`; it is `[]` when there are no members. */
+  /** A collection document always carries `data`; `[]` when there are no members. */
   data: PatreonResource<PatreonMemberAttributes>[]
-  /** Only present when `include` was requested and something matched it. */
+  /** Only present when `include` matched something. */
   included?: PatreonIncludedResource[]
   links?: { next?: string }
 }
 
-/** A member joined to the user and tier it references in `included`. */
+/** A member joined to the user and tier it references. */
 interface PatreonSponsorRecord {
   membership: PatreonResource<PatreonMemberAttributes>
   patron: PatreonUserResource | undefined
@@ -88,15 +82,13 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
 
   const campaignId = await fetchPatreonCampaignId(token)
 
-  // API v2 returns up to 1000 members per page and paginates with a `links.next` cursor.
-  // Every field read below is requested explicitly; v2 returns no attributes otherwise.
+  // v2 returns no attributes unless each one is requested, and pages with a `links.next` cursor.
   const sponsors: PatreonSponsorRecord[] = []
   let sponsorshipApi: string | undefined = `${PATREON_API}/campaigns/${campaignId}/members?include=user,currently_entitled_tiers&fields%5Bmember%5D=currently_entitled_amount_cents,patron_status,pledge_relationship_start&fields%5Buser%5D=image_url,url,first_name,full_name&fields%5Btier%5D=amount_cents`
 
   do {
-    // The annotation is not redundant: this pagination loop feeds `links.next` back into
-    // `sponsorshipApi`, so TypeScript cannot infer the response through the cycle and reports
-    // TS7022 without it. The campaign call below needs no such help.
+    // The annotation is needed: this loop feeds `links.next` back into `sponsorshipApi`, and
+    // TypeScript cannot infer the response through that cycle.
     const sponsorshipData: PatreonMembersData = await $fetch(sponsorshipApi, {
       method: 'GET',
       headers: {
@@ -106,11 +98,10 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
       },
       responseType: 'json',
     })
-    // `data` is guaranteed by the collection document; `included` is absent unless the request's
-    // `include` matched something.
+    // `included` is absent unless the request's `include` matched something.
     const included = sponsorshipData?.included ?? []
     const members = sponsorshipData.data
-    // Split once so the lookups below are typed by resource rather than by a union.
+    // Split by kind so each lookup below is typed, rather than a union `find` cannot narrow.
     const users = included.filter((v): v is PatreonUserResource => v.type === 'user')
     const tiers = included.filter((v): v is PatreonTierResource => v.type === 'tier')
 
@@ -155,7 +146,7 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
       createdAt: attributes?.pledge_relationship_start ?? undefined,
     }
 
-    // The "former_patron" and "declined_patron" both is past sponsors
+    // "former_patron" and "declined_patron" are both past sponsors
     const status = attributes?.patron_status
     if (status != null && PAST_PATRON_STATUSES.includes(status))
       sponsor.monthlyDollars = -1
@@ -164,9 +155,7 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
   })
 }
 
-/**
- * Resolve the campaign owned by the authenticated user.
- */
+/** Resolve the campaign owned by the authenticated user. */
 async function fetchPatreonCampaignId(token: string): Promise<string> {
   const userData = await $fetch(`${PATREON_API}/campaigns`, {
     method: 'GET',
