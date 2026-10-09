@@ -17,13 +17,24 @@ export const PatreonProvider: Provider = {
 const PATREON_API = 'https://www.patreon.com/api/oauth2/v2'
 const USER_AGENT = 'SponsorKit (https://github.com/antfu-collective/sponsorkit)'
 
+/** A JSON:API resource identifier; both members are required, except for client-originated resources. */
+interface PatreonIdentifier {
+  id: string
+  type: string
+}
+
+/** A relationship may carry `links` instead of `data`, so both are optional here. */
+interface PatreonRelationship {
+  data?: PatreonIdentifier | PatreonIdentifier[] | null
+  links?: { self?: string, related?: string }
+}
+
 /** A JSON:API resource; relationships carry the ids used to join `included` back to members. */
 interface PatreonResource<A = unknown> {
   id?: string
   type?: string
   attributes?: A
-  /** JSON:API spells to-one relationships as an object and to-many as an array. */
-  relationships?: Record<string, { data?: { id?: string, type?: string } | { id?: string, type?: string }[] | null }>
+  relationships?: Record<string, PatreonRelationship>
 }
 
 export interface PatreonMemberAttributes {
@@ -170,7 +181,11 @@ async function fetchPatreonCampaignId(token: string): Promise<string> {
   return campaignId
 }
 
-/** Read the id at `index` from a JSON:API relationship that may be a to-one or to-many. */
+/**
+ * Read the id at `index` from a relationship that may be a to-one or a to-many. The optional chain
+ * on `entry` is load-bearing: an empty to-many relationship yields `undefined`, which the type of
+ * `data[index]` does not show because `noUncheckedIndexedAccess` is off.
+ */
 function relatedId(resource: PatreonResource, name: string, index: number): string | undefined {
   const data = resource.relationships?.[name]?.data
   const entry = Array.isArray(data) ? data[index] : data
