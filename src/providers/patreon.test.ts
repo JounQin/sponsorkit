@@ -1,4 +1,5 @@
 import type { Mock } from 'vitest'
+import type { PatreonMemberAttributes, PatreonUserAttributes } from './patreon.ts'
 import { $fetch } from 'ofetch'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchPatreonSponsors } from './patreon.ts'
@@ -13,7 +14,7 @@ beforeEach(() => {
 
 const CAMPAIGNS_URL = 'https://www.patreon.com/api/oauth2/v2/campaigns'
 
-function member(id: string, userId: string, attributes: Record<string, any> = {}, tierId?: string) {
+function member(id: string, userId: string, attributes: PatreonMemberAttributes = {}, tierId?: string) {
   return {
     id,
     type: 'member',
@@ -31,7 +32,7 @@ function member(id: string, userId: string, attributes: Record<string, any> = {}
   }
 }
 
-function user(id: string, attributes: Record<string, any> = {}) {
+function user(id: string, attributes: PatreonUserAttributes = {}) {
   return {
     id,
     type: 'user',
@@ -202,14 +203,11 @@ describe('fetchPatreonSponsors', () => {
       .toThrow(/No Patreon campaign found/)
   })
 
-  it('explains the v1 retirement when the API responds with 410', async () => {
-    const gone = Object.assign(new Error('[GET] "https://www.patreon.com/api/oauth2/api/current_user/campaigns": 410 Gone'), {
-      response: { status: 410 },
-    })
-    fetchMock.mockRejectedValueOnce(gone)
+  it('propagates HTTP failures unchanged', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('[GET] "https://www.patreon.com/api/oauth2/v2/campaigns": 401 Unauthorized'))
 
     await expect(fetchPatreonSponsors('token'))
       .rejects
-      .toThrow(/v1 API was retired/)
+      .toThrow(/401 Unauthorized/)
   })
 })
