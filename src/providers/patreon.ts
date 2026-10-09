@@ -26,15 +26,12 @@ interface PatreonResource<A = unknown> {
   relationships?: Record<string, { data?: { id?: string, type?: string } | { id?: string, type?: string }[] | null }>
 }
 
-/** Documented only as a nullable string, so known values are matched, not encoded in the type. */
-type PatronStatus = string
-
-/** Both mark a lapsed sponsor. */
-const PAST_PATRON_STATUSES: readonly PatronStatus[] = ['former_patron', 'declined_patron']
+/** `patron_status` is documented only as a nullable string; these two mark a lapsed sponsor. */
+const PAST_PATRON_STATUSES: readonly string[] = ['former_patron', 'declined_patron']
 
 export interface PatreonMemberAttributes {
   currently_entitled_amount_cents?: number | null
-  patron_status?: PatronStatus | null
+  patron_status?: string | null
   pledge_relationship_start?: string | null
 }
 
