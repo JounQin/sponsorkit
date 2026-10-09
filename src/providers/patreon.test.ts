@@ -168,16 +168,18 @@ describe('fetchPatreonSponsors', () => {
         included: [user('u-1', { full_name: 'First' })],
         links: { next: 'https://www.patreon.com/api/oauth2/v2/campaigns/999/members?page%5Bcursor%5D=NEXT' },
       })
-    fetchMock.mockResolvedValueOnce({
-      data: [member('m-2', 'u-2')],
-      included: [user('u-2', { full_name: 'Second' })],
-      links: {},
-    })
+      .mockResolvedValueOnce({
+        data: [member('m-2', 'u-2')],
+        included: [user('u-2', { full_name: 'Second' })],
+        links: {},
+      })
 
     const sponsors = await fetchPatreonSponsors('token')
 
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(fetchMock.mock.calls[2][0]).toContain('page%5Bcursor%5D=NEXT')
+    // The cursor page is a fresh request, so it must carry the credentials too.
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe('Bearer token')
     expect(sponsors.map(s => s.sponsor.name)).toEqual(['First', 'Second'])
   })
 
@@ -232,6 +234,20 @@ describe('fetchPatreonSponsors', () => {
     await expect(fetchPatreonSponsors('token'))
       .rejects
       .toThrow(/No Patreon campaign found/)
+  })
+
+  it('handles a member whose user resource is absent from included', async () => {
+    fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
+      .mockResolvedValueOnce({
+        data: [member('m-1', 'u-1')],
+        included: [{ id: 't-1', type: 'tier', attributes: { amount_cents: 300 } }],
+        links: {},
+      })
+
+    const sponsors = await fetchPatreonSponsors('token')
+
+    expect(sponsors[0].sponsor).toMatchObject({ login: 'Anonymous', name: 'Anonymous', avatarUrl: '' })
+    expect(sponsors[0].monthlyDollars).toBe(5)
   })
 
   it('propagates HTTP failures unchanged', async () => {

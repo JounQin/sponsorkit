@@ -26,9 +26,6 @@ interface PatreonResource<A = unknown> {
   relationships?: Record<string, { data?: { id?: string, type?: string } | { id?: string, type?: string }[] | null }>
 }
 
-/** `patron_status` is documented only as a nullable string; these two mark a lapsed sponsor. */
-const PAST_PATRON_STATUSES: readonly string[] = ['former_patron', 'declined_patron']
-
 export interface PatreonMemberAttributes {
   currently_entitled_amount_cents?: number | null
   patron_status?: string | null
@@ -73,13 +70,16 @@ interface PatreonSponsorRecord {
   tier: PatreonTierResource | undefined
 }
 
+/** `patron_status` is documented only as a nullable string; these two mark a lapsed sponsor. */
+const PAST_PATRON_STATUSES: readonly string[] = ['former_patron', 'declined_patron']
+
 export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]> {
   if (!token)
     throw new Error('Patreon token is required')
 
   const campaignId = await fetchPatreonCampaignId(token)
 
-  // v2 returns no attributes unless each one is requested, and pages with a `links.next` cursor.
+  // v2 pages up to 1000 members and returns a `links.next` cursor.
   const sponsors: PatreonSponsorRecord[] = []
   let sponsorshipApi: string | undefined = `${PATREON_API}/campaigns/${campaignId}/members?include=user,currently_entitled_tiers&fields%5Bmember%5D=currently_entitled_amount_cents,patron_status,pledge_relationship_start&fields%5Buser%5D=image_url,url,first_name,full_name&fields%5Btier%5D=amount_cents`
 
@@ -88,15 +88,11 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
     // TypeScript cannot infer the response through that cycle.
     const sponsorshipData: PatreonMembersData = await $fetch(sponsorshipApi, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-      },
+      headers: patreonHeaders(token),
       responseType: 'json',
     })
     // `included` is absent unless the request's `include` matched something.
-    const included = sponsorshipData?.included ?? []
+    const included = sponsorshipData.included ?? []
     const members = sponsorshipData.data
     // Split by kind so each lookup below is typed, rather than a union `find` cannot narrow.
     const users = included.filter((v): v is PatreonUserResource => v.type === 'user')
@@ -104,7 +100,6 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
 
     sponsors.push(
       ...members
-        // Filter out "never pledged" members
         .filter(membership => membership.attributes?.patron_status != null)
         .map(membership => ({
           membership,
@@ -112,7 +107,7 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
           tier: tiers.find(v => v.id === relatedId(membership, 'currently_entitled_tiers', 0)),
         })),
     )
-    sponsorshipApi = sponsorshipData?.links?.next
+    sponsorshipApi = sponsorshipData.links?.next
   } while (sponsorshipApi)
 
   return sponsors.map((raw): Sponsorship => {
@@ -156,11 +151,7 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
 async function fetchPatreonCampaignId(token: string): Promise<string> {
   const userData = await $fetch(`${PATREON_API}/campaigns`, {
     method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'User-Agent': USER_AGENT,
-    },
+    headers: patreonHeaders(token),
     responseType: 'json',
   })
   const campaignId = userData?.data?.[0]?.id
@@ -179,4 +170,14 @@ function relatedId(resource: PatreonResource, name: string, index: number): stri
   const data = resource.relationships?.[name]?.data
   const entry = Array.isArray(data) ? data[index] : data
   return entry?.id
+}
+
+/** Shared by both calls, so a header added for one is never missing from the other. */
+function patreonHeaders(token: string) {
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    // Patreon may drop requests without one.
+    'User-Agent': USER_AGENT,
+  }
 }
