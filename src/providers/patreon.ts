@@ -63,7 +63,9 @@ interface PatreonTierResource extends PatreonResource<PatreonTierAttributes> {
 type PatreonIncludedResource = PatreonUserResource | PatreonTierResource
 
 interface PatreonMembersData {
-  data?: PatreonResource<PatreonMemberAttributes>[]
+  /** A JSON:API collection document always carries `data`; it is `[]` when there are no members. */
+  data: PatreonResource<PatreonMemberAttributes>[]
+  /** Only present when `include` was requested and something matched it. */
   included?: PatreonIncludedResource[]
   links?: { next?: string }
 }
@@ -98,8 +100,9 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
       },
       responseType: 'json',
     })
-    const included = Array.isArray(sponsorshipData?.included) ? sponsorshipData.included : []
-    const members = Array.isArray(sponsorshipData?.data) ? sponsorshipData.data : []
+    // `included` is absent unless the request's `include` matched something.
+    const included = sponsorshipData?.included ?? []
+    const members = sponsorshipData?.data ?? []
     // Split once so the lookups below are typed by resource rather than by a union.
     const users = included.filter((v): v is PatreonUserResource => v.type === 'user')
     const tiers = included.filter((v): v is PatreonTierResource => v.type === 'tier')

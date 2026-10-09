@@ -178,6 +178,13 @@ describe('fetchPatreonSponsors', () => {
     expect(sponsors[0].monthlyDollars).toBe(5)
   })
 
+  it('handles an empty member collection', async () => {
+    fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
+      .mockResolvedValueOnce({ data: [], links: {} })
+
+    await expect(fetchPatreonSponsors('token')).resolves.toEqual([])
+  })
+
   it('handles identity-masked members without throwing', async () => {
     fetchMock.mockResolvedValueOnce({ data: [{ id: '999', type: 'campaign' }] })
       .mockResolvedValueOnce({
