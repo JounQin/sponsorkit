@@ -62,11 +62,6 @@ interface PatreonTierResource extends PatreonResource<PatreonTierAttributes> {
 
 type PatreonIncludedResource = PatreonUserResource | PatreonTierResource
 
-interface PatreonCampaignData {
-  data?: PatreonResource[]
-  links?: { next?: string }
-}
-
 interface PatreonMembersData {
   data?: PatreonResource<PatreonMemberAttributes>[]
   included?: PatreonIncludedResource[]
@@ -92,9 +87,9 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
 
   do {
     // The annotation is not redundant: this pagination loop feeds `links.next` back into
-    // `sponsorshipApi`, so TypeScript cannot resolve the type argument on its own and reports
-    // TS7022 (circular inference) without it.
-    const sponsorshipData: PatreonMembersData = await $fetch<PatreonMembersData>(sponsorshipApi, {
+    // `sponsorshipApi`, so TypeScript cannot infer the response through the cycle and reports
+    // TS7022 without it. The campaign call below needs no such help.
+    const sponsorshipData: PatreonMembersData = await $fetch(sponsorshipApi, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -162,7 +157,7 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
  * Resolve the campaign owned by the authenticated user.
  */
 async function fetchPatreonCampaignId(token: string): Promise<string> {
-  const userData = await $fetch<PatreonCampaignData>(`${PATREON_API}/campaigns`, {
+  const userData = await $fetch(`${PATREON_API}/campaigns`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
