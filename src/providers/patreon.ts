@@ -63,6 +63,11 @@ interface PatreonMembersData {
   links?: { next?: string }
 }
 
+/** Only `id` is read; the campaign list needs no other attribute. */
+interface PatreonCampaignsData {
+  data?: { id?: string }[]
+}
+
 /** A member joined to the user and tier it references. */
 interface PatreonSponsorRecord {
   membership: PatreonResource<PatreonMemberAttributes>
@@ -149,12 +154,12 @@ export async function fetchPatreonSponsors(token: string): Promise<Sponsorship[]
 
 /** Resolve the campaign owned by the authenticated user. */
 async function fetchPatreonCampaignId(token: string): Promise<string> {
-  const userData = await $fetch(`${PATREON_API}/campaigns`, {
+  const campaigns = await $fetch<PatreonCampaignsData>(`${PATREON_API}/campaigns`, {
     method: 'GET',
     headers: patreonHeaders(token),
     responseType: 'json',
   })
-  const campaignId = userData?.data?.[0]?.id
+  const campaignId = campaigns.data?.[0]?.id
   if (!campaignId) {
     throw new Error(
       'No Patreon campaign found for the given token. '
